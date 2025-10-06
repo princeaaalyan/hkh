@@ -7,8 +7,8 @@ import threading
 import requests
 import zipfile
 
-API_TOKEN = '8472719783:AAH5EGILySllh1p0qfEsk9FVvxcG4icDJiU'
-OWNER_USERNAME = 'Hz_REFLEX'
+API_TOKEN = '8384001407:AAH4wuHYsEhK-vrHJaYF0sOTwCrCc1AVJ4g'
+OWNER_USERNAME = 'aalyanmods'
 
 bot = telebot.TeleBot(API_TOKEN, parse_mode="HTML")
 
