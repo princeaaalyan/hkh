@@ -59,12 +59,13 @@ def get_ydl_opts_base():
         'no_warnings': False,
     }
     
-    # Add cookies if file exists
-    if os.path.exists(COOKIES_FILE):
+    # Add cookies if file exists and is not empty
+    if os.path.exists(COOKIES_FILE) and os.path.getsize(COOKIES_FILE) > 50:
         opts['cookiefile'] = COOKIES_FILE
         print("✅ Using cookies.txt for authentication")
     else:
-        print("⚠️ cookies.txt not found - proceeding without authentication")
+        print("⚠️ cookies.txt not found or empty - some videos may not be accessible")
+        print("💡 To download age-restricted or private videos, add valid YouTube cookies to cookies.txt")
     
     return opts
 
@@ -178,7 +179,18 @@ def receive_link_video(message):
         bot.edit_message_text("Select quality:", chat_id, progress_msg.message_id, reply_markup=markup)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ Error fetching video info: {str(e)}", chat_id, progress_msg.message_id)
+        error_msg = str(e)
+        if "Sign in to confirm you're not a bot" in error_msg or "authentication" in error_msg.lower():
+            bot.edit_message_text(
+                "❌ Authentication required!\n\n"
+                "This video requires YouTube authentication. Please:\n"
+                "1. Add valid YouTube cookies to cookies.txt\n"
+                "2. Or try a different video that doesn't require login\n\n"
+                "💡 Contact the bot owner for help with cookies setup.",
+                chat_id, progress_msg.message_id
+            )
+        else:
+            bot.edit_message_text(f"❌ Error fetching video info: {error_msg}", chat_id, progress_msg.message_id)
         clear_user_state(chat_id)
 
 @bot.message_handler(func=lambda m: m.chat.id in user_states and user_states[m.chat.id].get("mode") == "yt_mp3")
