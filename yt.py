@@ -1,8 +1,3 @@
-# First, let's remove the empty file
-rm bot.py
-
-# Now create the complete bot file with all the code
-cat > bot.py << 'EOF'
 import telebot
 from telebot import types
 import yt_dlp
@@ -13,7 +8,7 @@ import requests
 import zipfile
 
 API_TOKEN = '8384001407:AAH4wuHYsEhK-vrHJaYF0sOTwCrCc1AVJ4g'
-OWNER_USERNAME = 'Hz_REFLEX'
+OWNER_USERNAME = 'aalyanmods'
 
 bot = telebot.TeleBot(API_TOKEN, parse_mode="HTML")
 
@@ -434,4 +429,3 @@ if __name__ == "__main__":
     setup_environment()
     print("✅ Bot is ready and polling...")
     bot.infinity_polling()
-EOF
