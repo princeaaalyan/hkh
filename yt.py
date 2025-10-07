@@ -1,3 +1,8 @@
+# First, let's remove the empty file
+rm bot.py
+
+# Now create the complete bot file with all the code
+cat > bot.py << 'EOF'
 import telebot
 from telebot import types
 import yt_dlp
@@ -429,3 +434,4 @@ if __name__ == "__main__":
     setup_environment()
     print("✅ Bot is ready and polling...")
     bot.infinity_polling()
+EOF
