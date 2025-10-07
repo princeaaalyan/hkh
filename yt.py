@@ -7,10 +7,13 @@ import threading
 import requests
 import zipfile
 
-API_TOKEN = '8384001407:AAH4wuHYsEhK-vrHJaYF0sOTwCrCc1AVJ4g'
-OWNER_USERNAME = 'aalyanmods'
+API_TOKEN = '8472719783:AAH5EGILySllh1p0qfEsk9FVvxcG4icDJiU'
+OWNER_USERNAME = 'Hz_REFLEX'
 
 bot = telebot.TeleBot(API_TOKEN, parse_mode="HTML")
+
+# Path for cookies file
+COOKIES_FILE = "cookies.txt"
 
 QUALITY_LABELS = {
     "144": "144p",
@@ -49,11 +52,27 @@ def clear_user_state(chat_id):
     if chat_id in user_states:
         del user_states[chat_id]
 
+def get_ydl_opts_base():
+    """Base yt-dlp options with cookies support"""
+    opts = {
+        'quiet': True,
+        'no_warnings': False,
+    }
+    
+    # Add cookies if file exists
+    if os.path.exists(COOKIES_FILE):
+        opts['cookiefile'] = COOKIES_FILE
+        print("✅ Using cookies.txt for authentication")
+    else:
+        print("⚠️ cookies.txt not found - proceeding without authentication")
+    
+    return opts
+
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     desc = (
         "👋 <b>Welcome to YouTube Downloader Bot!</b>\n\n"
-        "Here’s what I can do for you:\n"
+        "Here's what I can do for you:\n"
         "🎬 Download YouTube videos (up to 4K)\n"
         "🎞 Download YouTube Shorts\n"
         "🎵 Extract & send YouTube MP3 audio\n"
@@ -125,7 +144,9 @@ def receive_link_video(message):
 
     progress_msg = bot.send_message(chat_id, "🔍 Searching Video...")
     try:
-        ydl_opts = {'quiet': True, 'skip_download': True}
+        ydl_opts = get_ydl_opts_base()
+        ydl_opts.update({'skip_download': True})
+        
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
         bot.edit_message_text("📦 Data Fetched!", chat_id, progress_msg.message_id)
@@ -186,18 +207,20 @@ def receive_playlist_link(message):
 
 def start_download_mp3(chat_id, url):
     progress_msg = bot.send_message(chat_id, "🔍 Searching Video...")
-    ydl_opts = {
+    
+    ydl_opts = get_ydl_opts_base()
+    ydl_opts.update({
         'format': 'bestaudio/best',
         'outtmpl': 'downloads/%(title)s.%(ext)s',
         'noplaylist': True,
-        'quiet': True,
         'progress_hooks': [lambda d: download_hook(d, bot, chat_id, progress_msg)],
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
-    }
+    })
+    
     try:
         bot.edit_message_text("📦 Data Fetched!", chat_id, progress_msg.message_id)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -248,14 +271,14 @@ def start_download(chat_id, state):
             send_playlist(chat_id, url, playlist_format, progress_msg, playlist_download_hook)
             return
 
-        ydl_opts = {
-            'quiet': True,
+        ydl_opts = get_ydl_opts_base()
+        ydl_opts.update({
             'outtmpl': 'downloads/%(title)s.%(ext)s',
             'noplaylist': True,
             'merge_output_format': 'mp4',
             'format': 'bestvideo+bestaudio/best',
             'progress_hooks': [video_download_hook]
-        }
+        })
 
         if (mode in ["yt_video", "yt_shorts"]) or (playlist_format == "mp4"):
             if quality:
@@ -309,18 +332,21 @@ def send_media(chat_id, file_path, info, mode):
                 bot.send_video(chat_id, video, caption=caption, parse_mode='HTML', thumb=thumbnail_file, supports_streaming=True)
     except Exception as e:
         bot.send_message(chat_id, f"❌ Error sending media: {str(e)}")
-    try:
-        os.remove(file_path)
-        if thumbnail_file and os.path.exists(thumbnail_file):
-            os.remove(thumbnail_file)
-    except Exception:
-        pass
+    finally:
+        # Cleanup files
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            if thumbnail_file and os.path.exists(thumbnail_file):
+                os.remove(thumbnail_file)
+        except Exception as e:
+            print(f"Warning: Could not delete files: {e}")
 
 def send_playlist(chat_id, url, fmt, progress_msg, playlist_download_hook):
     bot.edit_message_text("🔍 Searching Playlist...", chat_id, progress_msg.message_id)
 
-    ydl_opts = {
-        'quiet': True,
+    ydl_opts = get_ydl_opts_base()
+    ydl_opts.update({
         'outtmpl': 'downloads/%(playlist_title)s/%(title)s.%(ext)s',
         'ignoreerrors': True,
         'format': 'bestaudio/best' if fmt == "mp3" else 'bestvideo+bestaudio/best',
@@ -328,7 +354,7 @@ def send_playlist(chat_id, url, fmt, progress_msg, playlist_download_hook):
         'noplaylist': False,
         'merge_output_format': 'mp4' if fmt == "mp4" else None,
         'progress_hooks': [playlist_download_hook]
-    }
+    })
 
     if fmt == "mp3":
         ydl_opts['postprocessors'] = [{
@@ -336,10 +362,11 @@ def send_playlist(chat_id, url, fmt, progress_msg, playlist_download_hook):
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }]
+        
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-        playlist_title = info.get('title', 'playlist')
+        playlist_title = info.get('title', 'playlist').replace('/', '_').replace('\\', '_')
         playlist_dir = f"downloads/{playlist_title}"
 
         if not os.path.exists(playlist_dir):
@@ -350,25 +377,55 @@ def send_playlist(chat_id, url, fmt, progress_msg, playlist_download_hook):
         with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for root, dirs, files in os.walk(playlist_dir):
                 for file in files:
-                    zipf.write(os.path.join(root, file), arcname=file)
+                    file_path = os.path.join(root, file)
+                    zipf.write(file_path, arcname=file)
+                    
         for percent in range(0, 101, 10):
             bot.edit_message_text(f"⏫ Uploading... {percent}%", chat_id, progress_msg.message_id)
             time.sleep(0.1)
+            
         with open(zip_filename, 'rb') as f:
             bot.send_document(chat_id, f, caption=f"📀 Playlist: <b>{playlist_title}</b>", parse_mode='HTML')
 
+        # Cleanup
         for root, dirs, files in os.walk(playlist_dir, topdown=False):
             for file in files:
                 os.remove(os.path.join(root, file))
             for dir in dirs:
                 os.rmdir(os.path.join(root, dir))
-        os.rmdir(playlist_dir)
-        os.remove(zip_filename)
+        if os.path.exists(playlist_dir):
+            os.rmdir(playlist_dir)
+        if os.path.exists(zip_filename):
+            os.remove(zip_filename)
+            
         bot.edit_message_text("✅ Done!", chat_id, progress_msg.message_id)
     except Exception as e:
         bot.edit_message_text(f"❌ Error downloading playlist: {str(e)}", chat_id, progress_msg.message_id)
 
-if __name__ == "__main__":
+def setup_environment():
+    """Setup required directories and check dependencies"""
+    # Create downloads directory
     if not os.path.exists("downloads"):
         os.makedirs("downloads")
+        print("✅ Created downloads directory")
+    
+    # Check if cookies.txt exists
+    if os.path.exists(COOKIES_FILE):
+        print("✅ cookies.txt found - authentication enabled")
+    else:
+        print("⚠️ cookies.txt not found - some age-restricted content may not be accessible")
+    
+    # Check for FFmpeg
+    try:
+        import subprocess
+        subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+        print("✅ FFmpeg is available")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("❌ FFmpeg not found. Audio conversion may not work properly.")
+        print("Install FFmpeg on Ubuntu: sudo apt update && sudo apt install ffmpeg")
+
+if __name__ == "__main__":
+    print("🚀 Starting YouTube Downloader Bot...")
+    setup_environment()
+    print("✅ Bot is ready and polling...")
     bot.infinity_polling()
